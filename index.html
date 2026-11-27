@@ -35,6 +35,7 @@ input,select{width:100%;font:inherit;padding:10px;border:1px solid var(--ln);bor
 .sheet{background:#fff;width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(env(safe-area-inset-bottom) + 16px)}
 .sheet h3{margin:0 0 8px}.sheet label{display:block;margin-top:8px;font-size:14px;color:#5b7580}
 .seg{display:flex;gap:6px;margin:6px 0}
+.card a{text-decoration:none}nav button{padding:10px 4px;font-size:15px}
 .tkl{display:block;margin-top:8px;font-size:14px;color:#5b7580}.sheet .ck{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:16px;color:var(--ink)}.ck input{width:24px;height:24px;margin:0}
 .sv{border-top:1px solid var(--ln);padding:8px 0}.sv:first-of-type{border:0}
 .empty{text-align:center;color:#5b7580;padding:30px 10px}
@@ -60,6 +61,12 @@ const rq=q=>new Promise((res,rej)=>{q.onsuccess=()=>res(q.result);q.onerror=()=>
 const load=async()=>{L=(await rq(st('readonly').getAll())).sort((a,b)=>a.code<b.code?-1:1)};
 const save=async c=>{await rq(st('readwrite').put(c));await load();render()};
 const last=c=>c.services.reduce((m,s)=>s.date>m?s.date:m,'');
+const fuOf=s=>s.fu===undefined?3:Number(s.fu)||0;
+const lastSv=c=>c.services.reduce((m,s)=>!m||s.date>m.date?s:m,null);
+const wa=(p,t)=>{let d=String(p).replace(/\D/g,'');if(d[0]==='0')d='88'+d;return `https://wa.me/${d}?text=${encodeURIComponent(t)}`};
+const SIG=' — Expert AC Care Engineering';
+const WA_FU=c=>`আসসালামু আলাইকুম ${c.name}, আপনার এসি সার্ভিসের সময় হয়ে এসেছে। সার্ভিস নিতে জানাবেন।`+SIG;
+const WA_DUE=c=>`আসসালামু আলাইকুম ${c.name}, আপনার বকেয়া ${tk(dueOf(c))}। সুবিধামতো পরিশোধ করার অনুরোধ রইল।`+SIG;
 const dueOf=c=>c.services.reduce((a,s)=>a+(s.bill-s.paid),0);
 const acName=(c,id)=>{const a=c.acs.find(x=>x.id===id);return a?`${a.brand} ${a.model}`.trim():'এসি নির্দিষ্ট নয়'};
 
@@ -82,14 +89,22 @@ const card=c=>`<div class="card" data-a="open" data-id="${c.id}">${c.photo?`<img
 const filt=()=>{const q=Q.toLowerCase();return L.filter(c=>!q||[c.name,c.phone,c.code,c.address,...c.acs.flatMap(a=>[a.brand,a.model,a.serial])].join(' ').toLowerCase().includes(q))};
 const listHtml=()=>{const r=filt();return r.length?r.map(card).join(''):`<div class="empty">${L.length?'কিছু পাওয়া যায়নি।':'কোনো কাস্টমার নেই। নিচের + বাটনে নতুন কাস্টমার যোগ করুন।'}</div>`};
 
-function nav(){return `<nav>${[['list','কাস্টমার'],['follow','ফলোআপ'],['backup','ব্যাকআপ']].map(([k,t])=>`<button data-a="tab" data-v="${k}" class="${V===k?'on':''}">${t}</button>`).join('')}</nav>`}
+function nav(){return `<nav>${[['list','কাস্টমার'],['follow','ফলোআপ'],['due','বকেয়া'],['backup','ব্যাকআপ']].map(([k,t])=>`<button data-a="tab" data-v="${k}" class="${V===k?'on':''}">${t}</button>`).join('')}</nav>`}
 
 function followHtml(){
   const t=today();
-  const r=L.filter(c=>last(c)).map(c=>({c,d:addM(last(c),F)})).filter(x=>days(x.d,t)<=30).sort((a,b)=>a.d<b.d?-1:1);
-  return `<main><div class="seg">${[3,6,12].map(n=>`<button data-a="fu" data-n="${n}" class="${F===n?'on':''}">${bn(n)} মাস</button>`).join('')}</div>
-  <small>সর্বশেষ সার্ভিসের পর ${bn(F)} মাস পূর্ণ হয়েছে বা ৩০ দিনের মধ্যে হবে।</small>
-  ${r.length?r.map(({c,d})=>{const n=days(d,t);return `<div class="card" data-a="open" data-id="${c.id}"><div><b>${esc(c.name)}</b><small>${esc(c.code)} · সর্বশেষ: ${dt(last(c))}</small><small class="${n<0?'late':'soon'}">${n<0?bn(-n)+' দিন দেরি':n===0?'আজ':bn(n)+' দিন বাকি'} (${dt(d)})</small></div><a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()"><button class="s">কল</button></a></div>`}).join(''):'<div class="empty">এই মুহূর্তে কোনো ফলোআপ নেই।</div>'}</main>`}
+  const r=(F==='s'?L.map(c=>{const s=lastSv(c);return s&&fuOf(s)?{c,d:addM(s.date,fuOf(s))}:null}).filter(Boolean):L.filter(c=>last(c)).map(c=>({c,d:addM(last(c),F)}))).filter(x=>days(x.d,t)<=30).sort((a,b)=>a.d<b.d?-1:1);
+  return `<main><div class="seg">${[3,6,12,'s'].map(n=>`<button data-a="fu" data-n="${n}" class="${F===n?'on':''}">${n==='s'?'নির্ধারিত':bn(n)+' মাস'}</button>`).join('')}</div>
+  <small>${F==='s'?'সর্বশেষ সার্ভিসে ঠিক করা ফলোআপের তারিখ এসে গেলে বা ৩০ দিনের মধ্যে হলে এখানে দেখাবে।':`সর্বশেষ সার্ভিসের পর ${bn(F)} মাস পূর্ণ হয়েছে বা ৩০ দিনের মধ্যে হবে।`}</small>
+  ${r.length?r.map(({c,d})=>{const n=days(d,t);return `<div class="card" data-a="open" data-id="${c.id}"><div><b>${esc(c.name)}</b><small>${esc(c.code)} · সর্বশেষ: ${dt(last(c))}</small><small class="${n<0?'late':'soon'}">${n<0?bn(-n)+' দিন দেরি':n===0?'আজ':bn(n)+' দিন বাকি'} (${dt(d)})</small></div><a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()"><button class="s">কল</button></a><a href="${wa(c.phone,WA_FU(c))}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><button class="s g">WhatsApp</button></a></div>`}).join(''):'<div class="empty">এই মুহূর্তে কোনো ফলোআপ নেই।</div>'}</main>`}
+
+function dueHtml(){
+  const m=today().slice(0,7),sv=L.flatMap(c=>c.services).filter(s=>s.date.startsWith(m));
+  const b=sv.reduce((a,s)=>a+s.bill,0),p=sv.reduce((a,s)=>a+s.paid,0);
+  const r=L.filter(c=>dueOf(c)>0).sort((x,y)=>dueOf(y)-dueOf(x)),tot=r.reduce((a,c)=>a+dueOf(c),0);
+  return `<main><div class="box"><h3>এই মাসের হিসাব</h3><div class="sum"><div><small>বিল</small><b>${tk(b)}</b></div><div><small>জমা</small><b class="ok">${tk(p)}</b></div><div><small>কাজ</small><b>${bn(sv.length)}টি</b></div></div></div>
+  <div class="box"><div class="sum"><div><small>মোট বকেয়া (${bn(r.length)} জন)</small><b class="due">${tk(tot)}</b></div></div></div>
+  ${r.map(c=>`<div class="card" data-a="open" data-id="${c.id}"><div><b>${esc(c.name)}</b><small>${esc(c.code)} · ${esc(c.phone)}</small><small class="due">বকেয়া ${tk(dueOf(c))}</small></div><a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()"><button class="s">কল</button></a><a href="${wa(c.phone,WA_DUE(c))}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><button class="s g">WhatsApp</button></a></div>`).join('')||'<div class="empty">কোনো বকেয়া নেই।</div>'}</main>`}
 
 function backHtml(){const lb=localStorage.getItem('lastBackup');return `<main><div class="box"><h3>ব্যাকআপ নিন</h3><p>সব কাস্টমার, সার্ভিস ও ছবি একটি JSON ফাইলে সেভ হবে। ফাইলটি Files/iCloud Drive-এ রাখুন।</p><small>সর্বশেষ ব্যাকআপ: ${lb?dt(lb):'এখনো নেওয়া হয়নি'}</small><div class="row"><button data-a="bk">ব্যাকআপ ফাইল তৈরি করুন</button></div></div>
   <div class="box"><h3>Restore করুন</h3><p>ব্যাকআপ ফাইল বেছে নিলে বর্তমান সব ডেটা মুছে ওই ফাইলের ডেটা বসবে।</p><input type="file" id="rs" accept=".json,application/json"></div>
@@ -102,29 +117,30 @@ function detail(c){
   <div class="box"><div class="card" style="border:0;padding:0;margin:0">${c.photo?`<img src="${c.photo}" alt="">`:`<i>${esc(c.name[0]||'?')}</i>`}<div><b>${esc(c.name)}</b><small>${esc(c.code)}</small><small>${esc(c.phone)}</small></div></div><p style="margin:8px 0 0">${esc(c.address)}</p>${c.outdoor||c.floors?`<p style="margin:6px 0 0">${c.outdoor?`আউটডোর: <b>${esc(c.outdoor)}</b>`:''}${c.outdoor&&c.floors?' · ':''}${c.floors?`বাড়ি কত তালা: <b>${esc(c.floors)}</b>`:''}</p>`:''}
   <div class="row"><a href="tel:${esc(c.phone)}"><button style="width:100%">কল</button></a><button class="g" data-a="editc">সম্পাদনা</button><button class="r" data-a="delc">মুছুন</button></div></div>
   <div class="box"><div class="sum"><div><small>মোট বিল</small><b>${tk(bill)}</b></div><div><small>জমা</small><b class="ok">${tk(paid)}</b></div><div><small>বকেয়া</small><b class="${bill-paid>0?'due':''}">${tk(bill-paid)}</b></div></div></div>
-  <div class="box"><h3>এসি</h3>${c.acs.map((a,i)=>`<div class="sv"><b>${esc(a.brand)} ${esc(a.model)}</b><small>সিরিয়াল: ${esc(a.serial)||'—'}</small><div class="row"><button class="g s" data-a="edita" data-i="${i}">সম্পাদনা</button><button class="r s" data-a="dela" data-i="${i}">মুছুন</button></div></div>`).join('')||'<small>কোনো এসি যোগ করা হয়নি।</small>'}<div class="row"><button data-a="adda">+ এসি যোগ করুন</button></div></div>
-  <div class="box"><h3>সার্ভিসের ইতিহাস</h3>${ss.map(s=>{const i=c.services.indexOf(s);return `<div class="sv"><b>${dt(s.date)}</b> · ${esc(acName(c,s.acId))}<small>${esc(s.note)}</small><small>বিল ${tk(s.bill)} · জমা ${tk(s.paid)} · <span class="${s.bill-s.paid>0?'due':''}">বকেয়া ${tk(s.bill-s.paid)}</span></small><div class="row"><button class="g s" data-a="edits" data-i="${i}">সম্পাদনা</button><button class="r s" data-a="dels" data-i="${i}">মুছুন</button></div></div>`}).join('')||'<small>কোনো সার্ভিস নেই।</small>'}<div class="row"><button data-a="adds">+ সার্ভিস যোগ করুন</button></div></div></main>`}
+  <div class="box"><h3>এসি</h3>${c.acs.map((a,i)=>`<div class="sv"><b>${esc(a.brand)} ${esc(a.model)}</b><small>${[a.type,a.cap].filter(Boolean).map(x=>esc(x)).join(' · ')}</small><small>সিরিয়াল: ${esc(a.serial)||'—'}</small><div class="row"><button class="g s" data-a="edita" data-i="${i}">সম্পাদনা</button><button class="r s" data-a="dela" data-i="${i}">মুছুন</button></div></div>`).join('')||'<small>কোনো এসি যোগ করা হয়নি।</small>'}<div class="row"><button data-a="adda">+ এসি যোগ করুন</button></div></div>
+  <div class="box"><h3>সার্ভিসের ইতিহাস</h3>${ss.map(s=>{const i=c.services.indexOf(s);return `<div class="sv"><b>${dt(s.date)}</b> · ${esc(acName(c,s.acId))}${s.work?` · ${esc(s.work)}`:''}${s.problem?`<small>সমস্যা: ${esc(s.problem)}</small>`:''}<small>${esc(s.note)}</small>${fuOf(s)?`<small>পরবর্তী ফলোআপ: ${dt(addM(s.date,fuOf(s)))}</small>`:''}<small>বিল ${tk(s.bill)} · জমা ${tk(s.paid)} · <span class="${s.bill-s.paid>0?'due':''}">বকেয়া ${tk(s.bill-s.paid)}</span></small><div class="row"><button class="g s" data-a="edits" data-i="${i}">সম্পাদনা</button><button class="r s" data-a="dels" data-i="${i}">মুছুন</button></div></div>`}).join('')||'<small>কোনো সার্ভিস নেই।</small>'}<div class="row"><button data-a="adds">+ সার্ভিস যোগ করুন</button></div></div></main>`}
 
 function render(){
   const c=CUR&&L.find(x=>x.id===CUR);
   let h;
   if(V==='detail'&&c)h=detail(c);
-  else{V=V==='detail'?'list':V;h=nav()+(V==='list'?`<main><input id="q" type="search" placeholder="নাম, ফোন, কোড, সিরিয়াল দিয়ে খুঁজুন" value="${esc(Q)}"><div id="lst">${listHtml()}</div></main><button class="fab" data-a="addc" aria-label="নতুন কাস্টমার">+</button>`:V==='follow'?followHtml():backHtml())}
+  else{V=V==='detail'?'list':V;h=nav()+(V==='list'?`<main><input id="q" type="search" placeholder="নাম, ফোন, কোড, সিরিয়াল দিয়ে খুঁজুন" value="${esc(Q)}"><div id="lst">${listHtml()}</div></main><button class="fab" data-a="addc" aria-label="নতুন কাস্টমার">+</button>`:V==='follow'?followHtml():V==='due'?dueHtml():backHtml())}
   $('#app').innerHTML=h;
   const q=$('#q');if(q)q.oninput=()=>{Q=q.value;$('#lst').innerHTML=listHtml()};
   const rs=$('#rs');if(rs)rs.onchange=restore;
 }
 
 const custF=[{k:'code',l:'কাস্টমার কোড',r:1},{k:'name',l:'নাম',r:1},{k:'phone',l:'ফোন',t:'tel',r:1},{k:'address',l:'ঠিকানা'},{k:'outdoor',l:'এসির আউটডোর কোথায় (একটি টিক দিন)',t:'tick',o:['বারান্দায়','দেওয়ালে','ছাদে']},{k:'floors',l:'বাড়ি কত তালা (যেমন: ১০/৫)'},{k:'photo',l:'ছবি',t:'photo'}];
-const acF=[{k:'brand',l:'ব্র্যান্ড',r:1},{k:'model',l:'মডেল'},{k:'serial',l:'সিরিয়াল নম্বর'}];
-const svF=c=>[{k:'date',l:'তারিখ',t:'date',r:1},{k:'acId',l:'এসি',t:'select',o:[['','নির্দিষ্ট নয়'],...c.acs.map(a=>[a.id,`${a.brand} ${a.model}`])]},{k:'note',l:'কাজের বিবরণ'},{k:'bill',l:'বিল (৳)',t:'number'},{k:'paid',l:'জমা (৳)',t:'number'}];
+const opts=a=>[['','নির্দিষ্ট নয়'],...a.map(x=>[x,x])];
+const acF=[{k:'brand',l:'ব্র্যান্ড',r:1},{k:'model',l:'মডেল'},{k:'type',l:'এসির ধরন',t:'select',o:opts(['ইনভার্টার','নন-ইনভার্টার'])},{k:'cap',l:'এসির ক্ষমতা',t:'select',o:opts(['১ টন','১.৫ টন','২ টন','২.৫ টন','৩ টন','অন্যান্য'])},{k:'serial',l:'সিরিয়াল নম্বর'}];
+const svF=c=>[{k:'date',l:'তারিখ',t:'date',r:1},{k:'acId',l:'এসি',t:'select',o:[['','নির্দিষ্ট নয়'],...c.acs.map(a=>[a.id,`${a.brand} ${a.model}`])]},{k:'work',l:'কাজের ধরন',t:'select',o:opts(['সার্ভিসিং','গ্যাস চার্জ','মেরামত','ইনস্টল','অন্যান্য'])},{k:'problem',l:'সমস্যা (যেমন: কুলিং কম)'},{k:'note',l:'কাজের বিবরণ'},{k:'bill',l:'বিল (৳)',t:'number'},{k:'paid',l:'জমা (৳)',t:'number'},{k:'fu',l:'পরবর্তী ফলোআপ',t:'select',o:[['3','৩ মাস পর'],['6','৬ মাস পর'],['12','১২ মাস পর'],['0','ফলোআপ লাগবে না']]}];
 const cur=()=>L.find(x=>x.id===CUR);
 
 document.addEventListener('click',async e=>{
   const el=e.target.closest('[data-a]');if(!el)return;
   const a=el.dataset.a,i=+el.dataset.i,c=cur();
   if(a==='tab'){V=el.dataset.v;render()}
-  else if(a==='fu'){F=+el.dataset.n;render()}
+  else if(a==='fu'){F=el.dataset.n==='s'?'s':+el.dataset.n;render()}
   else if(a==='open'){CUR=el.dataset.id;V='detail';render();scrollTo(0,0)}
   else if(a==='back'){V='list';CUR=null;render()}
   else if(a==='addc'){const n=L.reduce((m,x)=>Math.max(m,parseInt(x.code.replace(/\D/g,''))||0),0)+1;
@@ -134,8 +150,8 @@ document.addEventListener('click',async e=>{
   else if(a==='adda')form('এসি যোগ করুন',acF,{},v=>{c.acs.push({id:uid(),...v});return save(c)});
   else if(a==='edita')form('এসি সম্পাদনা',acF,c.acs[i],v=>{Object.assign(c.acs[i],v);return save(c)});
   else if(a==='dela'){if(confirm('এসিটি মুছবেন?')){c.acs.splice(i,1);save(c)}}
-  else if(a==='adds')form('নতুন সার্ভিস',svF(c),{date:today(),bill:0,paid:0},v=>{c.services.push({id:uid(),...v});return save(c)});
-  else if(a==='edits')form('সার্ভিস সম্পাদনা',svF(c),c.services[i],v=>{Object.assign(c.services[i],v);return save(c)});
+  else if(a==='adds')form('নতুন সার্ভিস',svF(c),{date:today(),bill:0,paid:0,fu:'3'},v=>{c.services.push({id:uid(),...v});return save(c)});
+  else if(a==='edits')form('সার্ভিস সম্পাদনা',svF(c),{fu:'3',...c.services[i]},v=>{Object.assign(c.services[i],v);return save(c)});
   else if(a==='dels'){if(confirm('সার্ভিসটি মুছবেন?')){c.services.splice(i,1);save(c)}}
   else if(a==='bk'){
     const blob=new Blob([JSON.stringify({app:'accare',version:1,date:today(),customers:L})],{type:'application/json'});
